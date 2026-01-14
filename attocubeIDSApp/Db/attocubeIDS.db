@@ -1,0 +1,18 @@
+record(int64in, "$(P)$(R):Displacement0") {
+    field(DTYP, "asynInt64")
+    field(INP, "@asyn($(PORT),$(ADDR=0))AXIS0_DISPLACEMENT")
+    field(EGU, "pm")
+    field(SCAN, "I/O Intr")
+}
+record(int64in, "$(P)$(R):Displacement1") {
+    field(DTYP, "asynInt64")
+    field(INP, "@asyn($(PORT),$(ADDR=0))AXIS1_DISPLACEMENT")
+    field(EGU, "pm")
+    field(SCAN, "I/O Intr")
+}
+record(int64in, "$(P)$(R):Displacement2") {
+    field(DTYP, "asynInt64")
+    field(INP, "@asyn($(PORT),$(ADDR=0))AXIS2_DISPLACEMENT")
+    field(EGU, "pm")
+    field(SCAN, "I/O Intr")
+}

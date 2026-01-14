@@ -1,12 +1,11 @@
 #include <iostream>
+#include <string_view>
+#include <chrono>
 
 #include <asynOctetSyncIO.h>
 #include <epicsExport.h>
 #include <epicsThread.h>
 #include <iocsh.h>
-
-#include "json.hpp"
-using json = nlohmann::json;
 
 #include "attocubeIDS.hpp"
 
@@ -16,70 +15,109 @@ static void poll_thread_C(void* pPvt) {
 }
 
 constexpr int MAX_CONTROLLERS = 1;
-constexpr int INTERFACE_MASK = asynInt32Mask | asynFloat64Mask | asynOctetMask | asynDrvUserMask;
-constexpr int INTERRUPT_MASK = asynInt32Mask | asynFloat64Mask | asynOctetMask;
+constexpr int INTERFACE_MASK = asynInt32Mask | asynInt64Mask | asynFloat64Mask | asynOctetMask | asynDrvUserMask;
+constexpr int INTERRUPT_MASK = asynInt32Mask | asynInt64Mask | asynFloat64Mask | asynOctetMask;
 constexpr int ASYN_FLAGS = ASYN_MULTIDEVICE | ASYN_CANBLOCK;
 
 AttocubeIDS::AttocubeIDS(const char* conn_port, const char* driver_port)
     : asynPortDriver(driver_port, MAX_CONTROLLERS, INTERFACE_MASK, INTERRUPT_MASK, ASYN_FLAGS, 1, 0, 0) {
 
     asynStatus status = pasynOctetSyncIO->connect(conn_port, 0, &pasynUserDriver_, NULL);
-    pasynOctetSyncIO->setInputEos(pasynUserDriver_, "}", 1);
+    pasynOctetSyncIO->setInputEos(pasynUserDriver_, "\n", 1);
     if (status) {
         asynPrint(pasynUserDriver_, ASYN_TRACE_ERROR, "Failed to connect to Attocube IDS3010\n");
         return;
     }
 
+    createParam(AXIS0_DISPLACEMENT_STR, asynParamInt64, &axis0DisplacementId_);
+    createParam(AXIS1_DISPLACEMENT_STR, asynParamInt64, &axis1DisplacementId_);
+    createParam(AXIS2_DISPLACEMENT_STR, asynParamInt64, &axis2DisplacementId_);
+
     epicsThreadCreate("AttocubeIDSPoller", epicsThreadPriorityLow,
                       epicsThreadGetStackSize(epicsThreadStackMedium), (EPICSTHREADFUNC)poll_thread_C, this);
 }
 
+asynStatus AttocubeIDS::write_read(size_t write_len) {
+    nbytesout_ = 0;
+    nbytesin_ = 0;
+    eom_reason_ = 0;
+    asynStatus status = pasynOctetSyncIO->writeRead(
+	    pasynUserDriver_,
+	    out_buffer_.data(), write_len,
+	    in_buffer_.data(), in_buffer_.size(),
+	    IO_TIMEOUT,
+	    &nbytesout_, &nbytesin_, &eom_reason_);
+
+    if (status) {
+        asynPrint(pasynUserDriver_, ASYN_TRACE_ERROR, "AttocubeIDS::write_read() failed\n");
+    }
+
+    return status;
+}
+
+std::optional<json> AttocubeIDS::write_read_json(std::string_view method, json params = json{}) {
+    json rpc = {
+	{"jsonrpc", "2.0"},
+	{"id", 1},
+	{"method", method}
+    };
+    if (!params.empty()) rpc["params"] = params;
+
+    // dump the json to a string, if its bigger than buffer size, return
+    std::string rpc_str = rpc.dump();
+    if (rpc_str.size() >= BUFFER_SIZE) {
+        asynPrint(pasynUserDriver_, ASYN_TRACE_ERROR, "json out is larger that buffer size!\n");
+	return std::nullopt;
+    }
+
+    // copy the json string to the output buffer
+    std::copy(rpc_str.begin(), rpc_str.end(), out_buffer_.begin());
+
+    // write the output buffer to the controller, return if there is an error
+    if (write_read(rpc_str.length())) return std::nullopt;
+
+    try {
+	// parse the input JSON data and return it
+	return json::parse(in_buffer_.begin(), in_buffer_.begin() + nbytesin_);
+    } catch (...) {
+        asynPrint(pasynUserDriver_, ASYN_TRACE_ERROR, "Error parsing input JSON\n");
+	return std::nullopt;
+    }
+}
+
+std::optional<std::array<int64_t, NUM_AXES>> AttocubeIDS::get_displacements() {
+    if (auto data = write_read_json(Method::AxesDisplacement); data.has_value()) {
+	if (data.value().contains("result")) {
+	    try {
+		return data.value()["result"].get<std::array<int64_t, NUM_AXES>>();
+	    } catch (...) {
+		return std::nullopt;
+	    }
+	}
+    }
+    return std::nullopt;
+}
+
 void AttocubeIDS::poll() {
     while (true) {
+	// auto start = std::chrono::steady_clock::now();
+
 	lock();
 
-	json rpc;
-        rpc["jsonrpc"] = "2.0";
-	rpc["method"] = "com.attocube.ids.displacement.getAxisDisplacement";
-	rpc["params"] = {0};
-        rpc["id"] = 1;
-	std::string out_str = rpc.dump();
-	std::copy(out_str.begin(), out_str.end(), out_buffer_.begin());
-	std::cout << "out_buffer_ = " << out_buffer_.data() << std::endl;
-
-	size_t nbytesout = 0;
-	size_t nbytesin = 0;
-	int eom_reason = 0;
-	asynStatus status = pasynOctetSyncIO->writeRead(
-		pasynUserDriver_,
-		out_buffer_.data(), out_buffer_.size(),
-		in_buffer_.data(), in_buffer_.size(),
-		IO_TIMEOUT,
-		&nbytesout, &nbytesin, &eom_reason);
-
-	std::cout << "sent " << nbytesout << " bytes\n";
-	std::cout << "recieved " << nbytesin << " bytes\n";
-	std::cout << "in_buffer_ = " << in_buffer_.data() << std::endl;
-	if (status) {
-	    std::cout << "Error!\n";
-	} else {
-	    try {
-		std::string buffer_str(in_buffer_.begin(), in_buffer_.begin()+nbytesin);
-		buffer_str.push_back('}');
-		std::cout << "buffer_str: " << buffer_str << "\n";
-		json data = json::parse(buffer_str);
-		if (data.contains("result")) {
-		    std::vector<int> results = data["result"].get<std::vector<int>>();
-		    std::cout << "position: " << results.at(1) << "\n";
-		}
-	    } catch (...) {
-		std::cout << "parse failed\n";
-	    }
+	if (auto disps = get_displacements(); disps) {
+	    auto [d0, d1, d2] = *disps;
+	    setInteger64Param(axis0DisplacementId_, d0);
+	    setInteger64Param(axis1DisplacementId_, d1);
+	    setInteger64Param(axis2DisplacementId_, d2);
 	}
 
         callParamCallbacks();
 	unlock();
-	epicsThreadSleep(1.0);
+
+	// auto end = std::chrono::steady_clock::now();
+	// auto elap = std::chrono::duration<double>(end-start);
+	// std::cout << "elap = " << elap.count()*1000 << " ms" << std::endl;
+	epicsThreadSleep(0.1);
     }
 }
 
