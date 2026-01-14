@@ -55,6 +55,12 @@ record(int64in, "$(P)$(R):RefPos2") {
     field(SCAN, "I/O Intr")
 }
 
+record(longin, "$(P)$(R):MeasEnabled") {
+    field(DTYP, "asynInt32")
+    field(INP, "@asyn($(PORT),$(ADDR=0))MEASUREMENT_ENABLED")
+    field(SCAN, "I/O Intr")
+}
+
 record(ao, "$(P)$(R):PollPeriodSec") {
     field(DTYP, "asynFloat64")
     field(OUT, "@asyn($(PORT),$(ADDR=0))POLL_PERIOD")
@@ -63,4 +69,14 @@ record(ao, "$(P)$(R):PollPeriodSec") {
     field(VAL, 0.1)
     field(DRVH, 1e6)
     field(DRVL, 0.01)
+}
+
+record(bo, "$(P)$(R):SuspendPoller") {
+    field(DTYP, "asynInt32")
+    field(OUT, "@asyn($(PORT),$(ADDR=0))SUSPEND_POLLER")
+}
+
+record(bo, "$(P)$(R):ResumePoller") {
+    field(DTYP, "asynInt32")
+    field(OUT, "@asyn($(PORT),$(ADDR=0))RESUME_POLLER")
 }

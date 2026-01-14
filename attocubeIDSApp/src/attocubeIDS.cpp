@@ -29,7 +29,10 @@ AttocubeIDS::AttocubeIDS(const char* conn_port, const char* driver_port)
         return;
     }
 
+    createParam(RESUME_POLLER_STR, asynParamInt32, &resumePollerId_);
+    createParam(SUSPEND_POLLER_STR, asynParamInt32, &suspendPollerId_);
     createParam(POLL_PERIOD_STR, asynParamFloat64, &pollPeriodId_);
+    createParam(MEASUREMENT_ENABLED_STR, asynParamInt32, &measurementEnabledId_);
     createParam(AXIS0_DISPLACEMENT_STR, asynParamInt64, &axis0DisplacementId_);
     createParam(AXIS1_DISPLACEMENT_STR, asynParamInt64, &axis1DisplacementId_);
     createParam(AXIS2_DISPLACEMENT_STR, asynParamInt64, &axis2DisplacementId_);
@@ -40,7 +43,7 @@ AttocubeIDS::AttocubeIDS(const char* conn_port, const char* driver_port)
     createParam(AXIS1_REFERENCE_POS_STR, asynParamInt64, &axis1ReferencePosId_);
     createParam(AXIS2_REFERENCE_POS_STR, asynParamInt64, &axis2ReferencePosId_);
 
-    epicsThreadCreate("AttocubeIDSPoller", epicsThreadPriorityLow,
+   poller_thread_id_ = epicsThreadCreate("AttocubeIDSPoller", epicsThreadPriorityLow,
                       epicsThreadGetStackSize(epicsThreadStackMedium), (EPICSTHREADFUNC)poll_thread_C, this);
 }
 
@@ -92,19 +95,6 @@ std::optional<json> AttocubeIDS::write_read_json(std::string_view method, json p
     }
 }
 
-std::optional<std::array<int64_t, NUM_AXES>> AttocubeIDS::get_axes(std::string_view method) {
-    if (auto data = write_read_json(method); data) {
-	if (data->contains("result")) {
-	    try {
-		return data.value()["result"].get<std::array<int64_t, NUM_AXES>>();
-	    } catch (...) {
-		return std::nullopt;
-	    }
-	}
-    }
-    return std::nullopt;
-}
-
 void AttocubeIDS::poll() {
     while (true) {
 	// auto start = std::chrono::steady_clock::now();
@@ -115,25 +105,30 @@ void AttocubeIDS::poll() {
 	getDoubleParam(pollPeriodId_, &poll_period);
 	poll_period = std::max(poll_period, POLL_PERIOD_MIN);
 
-	if (auto disps = get_axes(Method::AxesDisplacement); disps) {
-	    auto [d0, d1, d2] = *disps;
+	if (auto disps = do_rpc<I64Array4>(Method::AxesDisplacement); disps) {
+	    auto [_, d0, d1, d2] = *disps;
 	    setInteger64Param(axis0DisplacementId_, d0);
 	    setInteger64Param(axis1DisplacementId_, d1);
 	    setInteger64Param(axis2DisplacementId_, d2);
 	}
 
-	if (auto abspos = get_axes(Method::AbsolutePositions); abspos) {
-	    auto [p0, p1, p2] = *abspos;
+	if (auto abspos = do_rpc<I64Array4>(Method::AbsolutePositions); abspos) {
+	    auto [_, p0, p1, p2] = *abspos;
 	    setInteger64Param(axis0AbsolutePosId_, p0);
 	    setInteger64Param(axis1AbsolutePosId_, p1);
 	    setInteger64Param(axis2AbsolutePosId_, p2);
 	}
 
-	if (auto refpos = get_axes(Method::ReferencePositions); refpos) {
-	    auto [r0, r1, r2] = *refpos;
+	if (auto refpos = do_rpc<I64Array4>(Method::ReferencePositions); refpos) {
+	    auto [_, r0, r1, r2] = *refpos;
 	    setInteger64Param(axis0ReferencePosId_, r0);
 	    setInteger64Param(axis1ReferencePosId_, r1);
 	    setInteger64Param(axis2ReferencePosId_, r2);
+	}
+
+	if (auto meas_enabled = do_rpc<IntPair>(Method::MeasurementEnabled); meas_enabled) {
+	    auto [_, enabled] = *meas_enabled;
+	    setIntegerParam(measurementEnabledId_, enabled);
 	}
 
         callParamCallbacks();
@@ -142,18 +137,30 @@ void AttocubeIDS::poll() {
 	// auto end = std::chrono::steady_clock::now();
 	// auto elap = std::chrono::duration<double>(end-start);
 	// std::cout << "elap = " << elap.count()*1000 << " ms" << std::endl;
+	if (poller_should_suspend_) {
+	    std::cout << "Poller: Suspending...\n";
+	    poller_should_suspend_ = false;
+	    epicsThreadSuspendSelf();
+	}
+
 	epicsThreadSleep(poll_period);
     }
 }
 
-// asynStatus AttocubeIDS::writeInt32(asynUser* pasynUser, epicsInt32 value) {
-    // // int function = pasynUser->reason;
-    // bool comm_ok = true;
-//
-    // callParamCallbacks();
-    // return comm_ok ? asynSuccess : asynError;
-// }
-//
+asynStatus AttocubeIDS::writeInt32(asynUser* pasynUser, epicsInt32 value) {
+    int function = pasynUser->reason;
+    bool comm_ok = true;
+
+    if (function == resumePollerId_) {
+	epicsThreadResume(poller_thread_id_);
+    } else if (function == suspendPollerId_) {
+	poller_should_suspend_ = true;
+    }
+
+    callParamCallbacks();
+    return comm_ok ? asynSuccess : asynError;
+}
+
 // asynStatus AttocubeIDS::writeFloat64(asynUser* pasynUser, epicsFloat64 value) {
     // // int function = pasynUser->reason;
     // bool comm_ok = true;
@@ -164,9 +171,7 @@ void AttocubeIDS::poll() {
 
 // register function for iocsh
 extern "C" int AttocubeIDSConfig(const char* conn_port, const char* driver_port) {
-    AttocubeIDS* pAttocubeIDS = new AttocubeIDS(conn_port, driver_port);
-    pAttocubeIDS = NULL;
-    (void)pAttocubeIDS;
+    new AttocubeIDS(conn_port, driver_port);
     return (asynSuccess);
 }
 
