@@ -6,4 +6,5 @@ Language: Cpp
 DerivePointerAlignment: false
 PointerAlignment: Left
 ReferenceAlignment: Left
+AlwaysBreakTemplateDeclarations: Yes
 ColumnLimit: 110

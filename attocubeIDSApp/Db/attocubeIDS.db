@@ -1,54 +1,54 @@
-record(int64in, "$(P)$(R):Disp0") {
-    field(DTYP, "asynInt64")
-    field(INP, "@asyn($(PORT),$(ADDR=0))AXIS0_DISPLACEMENT")
-    field(EGU, "pm")
-    field(SCAN, "I/O Intr")
-}
-record(int64in, "$(P)$(R):Disp1") {
-    field(DTYP, "asynInt64")
-    field(INP, "@asyn($(PORT),$(ADDR=0))AXIS1_DISPLACEMENT")
-    field(EGU, "pm")
-    field(SCAN, "I/O Intr")
-}
-record(int64in, "$(P)$(R):Disp2") {
-    field(DTYP, "asynInt64")
-    field(INP, "@asyn($(PORT),$(ADDR=0))AXIS2_DISPLACEMENT")
-    field(EGU, "pm")
-    field(SCAN, "I/O Intr")
-}
-
-record(int64in, "$(P)$(R):AbsPos0") {
+record(int64in, "$(P)$(R):AbsPos1") {
     field(DTYP, "asynInt64")
     field(INP, "@asyn($(PORT),$(ADDR=0))AXIS0_ABSOLUTE_POS")
     field(EGU, "pm")
     field(SCAN, "I/O Intr")
 }
-record(int64in, "$(P)$(R):AbsPos1") {
+record(int64in, "$(P)$(R):AbsPos2") {
     field(DTYP, "asynInt64")
     field(INP, "@asyn($(PORT),$(ADDR=0))AXIS1_ABSOLUTE_POS")
     field(EGU, "pm")
     field(SCAN, "I/O Intr")
 }
-record(int64in, "$(P)$(R):AbsPos2") {
+record(int64in, "$(P)$(R):AbsPos3") {
     field(DTYP, "asynInt64")
     field(INP, "@asyn($(PORT),$(ADDR=0))AXIS2_ABSOLUTE_POS")
     field(EGU, "pm")
     field(SCAN, "I/O Intr")
 }
 
-record(int64in, "$(P)$(R):RefPos0") {
+record(int64in, "$(P)$(R):Disp1") {
+    field(DTYP, "asynInt64")
+    field(INP, "@asyn($(PORT),$(ADDR=0))AXIS0_DISPLACEMENT")
+    field(EGU, "pm")
+    field(SCAN, "I/O Intr")
+}
+record(int64in, "$(P)$(R):Disp2") {
+    field(DTYP, "asynInt64")
+    field(INP, "@asyn($(PORT),$(ADDR=0))AXIS1_DISPLACEMENT")
+    field(EGU, "pm")
+    field(SCAN, "I/O Intr")
+}
+record(int64in, "$(P)$(R):Disp3") {
+    field(DTYP, "asynInt64")
+    field(INP, "@asyn($(PORT),$(ADDR=0))AXIS2_DISPLACEMENT")
+    field(EGU, "pm")
+    field(SCAN, "I/O Intr")
+}
+
+record(int64in, "$(P)$(R):RefPos1") {
     field(DTYP, "asynInt64")
     field(INP, "@asyn($(PORT),$(ADDR=0))AXIS0_REFERENCE_POS")
     field(EGU, "pm")
     field(SCAN, "I/O Intr")
 }
-record(int64in, "$(P)$(R):RefPos1") {
+record(int64in, "$(P)$(R):RefPos2") {
     field(DTYP, "asynInt64")
     field(INP, "@asyn($(PORT),$(ADDR=0))AXIS1_REFERENCE_POS")
     field(EGU, "pm")
     field(SCAN, "I/O Intr")
 }
-record(int64in, "$(P)$(R):RefPos2") {
+record(int64in, "$(P)$(R):RefPos3") {
     field(DTYP, "asynInt64")
     field(INP, "@asyn($(PORT),$(ADDR=0))AXIS2_REFERENCE_POS")
     field(EGU, "pm")
@@ -64,19 +64,65 @@ record(longin, "$(P)$(R):MeasEnabled") {
 record(ao, "$(P)$(R):PollPeriodSec") {
     field(DTYP, "asynFloat64")
     field(OUT, "@asyn($(PORT),$(ADDR=0))POLL_PERIOD")
-    field(EGU, "s")
+    field(EGU, "sec")
+    field(PREC, 3)
     field(PINI, 1)
     field(VAL, 0.1)
     field(DRVH, 1e6)
     field(DRVL, 0.01)
 }
 
+record(mbbo, "$(P)$(R):PollPeriodMenu") {
+    field(VAL, 2)
+
+    field(ZRST, "10 seconds")
+    field(ZRVL, 1)
+
+    field(ONST,"1 seconds")
+    field(ONVL, 2)
+
+    field(TWST,"0.1 seconds")
+    field(TWVL, 3)
+
+    field(THST,"0.01 seconds")
+    field(THVL, 4)
+
+    field(FLNK, "$(P)$(R):poll_calc.PROC")
+}
+
+record(calcout, "$(P)$(R):poll_calc") {
+    field(INPA, "$(P)$(R):PollPeriodMenu.RVAL")
+    field(INPB, "$(P)$(R):PollPeriodSec.VAL")
+    field(CALC, "A=1 ? 10.0 : A=2 ? 1 : A=3 ? 0.1 : A=4 ? 0.01 : B")
+    field(OUT, "$(P)$(R):PollPeriodSec.VAL PP")
+}
+
 record(bo, "$(P)$(R):SuspendPoller") {
     field(DTYP, "asynInt32")
     field(OUT, "@asyn($(PORT),$(ADDR=0))SUSPEND_POLLER")
+    field(FLNK, "$(P)$(R):set_polling_flag0.PROC")
 }
 
 record(bo, "$(P)$(R):ResumePoller") {
     field(DTYP, "asynInt32")
     field(OUT, "@asyn($(PORT),$(ADDR=0))RESUME_POLLER")
+    field(FLNK, "$(P)$(R):set_polling_flag1.PROC")
+}
+
+record(bo, "$(P)$(R):set_polling_flag1") {
+    field(DOL, 1)
+    field(OMSL, "closed_loop")
+    field(OUT, "$(P)$(R):Polling.VAL PP")
+}
+
+record(bo, "$(P)$(R):set_polling_flag0") {
+    field(DOL, 0)
+    field(OMSL, "closed_loop")
+    field(OUT, "$(P)$(R):Polling.VAL PP")
+}
+
+record(bi, "$(P)$(R):Polling") {
+    field(VAL, 1)
+    field(ZNAM, "Suspended")
+    field(ONAM, "Polling")
 }

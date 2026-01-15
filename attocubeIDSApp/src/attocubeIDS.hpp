@@ -2,8 +2,8 @@
 #include "json.hpp"
 #include <array>
 #include <asynPortDriver.h>
-#include <optional>
 #include <iostream>
+#include <optional>
 
 using json = nlohmann::json;
 
@@ -14,7 +14,7 @@ inline constexpr std::string_view AbsolutePosition = "com.attocube.ids.displacem
 inline constexpr std::string_view AbsolutePositions = "com.attocube.ids.displacement.getAbsolutePositions";
 inline constexpr std::string_view ReferencePositions = "com.attocube.ids.displacement.getReferencePositions";
 inline constexpr std::string_view MeasurementEnabled = "com.attocube.ids.displacement.getMeasurementEnabled";
-};
+}; // namespace Method
 
 // asyn parameter names
 inline constexpr char AXIS0_DISPLACEMENT_STR[] = "AXIS0_DISPLACEMENT";
@@ -44,50 +44,52 @@ class AttocubeIDS : public asynPortDriver {
     // virtual asynStatus writeFloat64(asynUser* pasynUser, epicsFloat64 value);
 
   private:
-    asynUser* pasynUserDriver_;                   // pointer to the asynUser for this driver
-    std::array<char, IO_BUFFER_SIZE> in_buffer_;  // Output data buffer
-    std::array<char, IO_BUFFER_SIZE> out_buffer_; // Input data buffer
-    size_t nbytesout_ = 0;                        // number of bytes sent on the last write
-    size_t nbytesin_ = 0;                         // number of bytes received on the last read
-    int eom_reason_ = 0;
-    epicsThreadId poller_thread_id_;
-    bool poller_should_suspend_ = false;
+    asynUser* pasynUserDriver_;                   ///< Pointer to the asynUser for this driver.
+    std::array<char, IO_BUFFER_SIZE> in_buffer_;  ///< Input data buffer (received from device).
+    std::array<char, IO_BUFFER_SIZE> out_buffer_; ///< Output data buffer (sent to device).
+    size_t nbytesout_ = 0;                        ///< Number of bytes sent on the last write operation.
+    size_t nbytesin_ = 0;                         ///< Number of bytes received on the last read operation.
+    int eom_reason_ = 0;                          ///< Reason for End of Message (EOM) on last read.
+    epicsThreadId poller_thread_id_;              ///< Identifier for the background polling thread.
+    bool poller_should_suspend_ = false;          ///< Flag to request suspension of the poller thread.
 
     // Some internal type aliases
-    using I64Array3 = std::array<int64_t, 3>;
-    using I64Array4 = std::array<int64_t, 4>;
-    using IntPair = std::tuple<int, int>;
+    using I64Array3 = std::array<int64_t, 3>; ///< 3-element 64-bit integer array (e.g., axes displacement).
+    using I64Array4 = std::array<int64_t, 4>; ///< 4-element 64-bit integer array.
+    using IntPair = std::tuple<int, int>;     ///< Pair of integers for coordinate or status mapping.
 
-    // Writes the out_buffer_ to the device and reads the reply into in_buffer_
+    /// @brief Writes out_buffer_ to device and reads reply into in_buffer_
+    ///
+    /// @param write_len (Optional) Number of characters in out_buffer_ to write.
+    /// @return asynStatus.
     asynStatus write_read(size_t write_len = IO_BUFFER_SIZE);
 
-    // Constructs a JSON formatted command with the given method and params, stores it
-    // in out_buffer_ sends it to the controller, then reads the reply into in_buffer_,
-    // and attempts to parse the input as JSON, returning an optional<json>.
+    /// @brief Constructs JSON-RPC formatted command, writes it to the device
+    /// then reads the reply and attempts to parse it to json.
+    ///
+    /// @param method The JSON-RPC method to call
+    /// @param params (Optional) A JSON object for parameters to pass.
+    /// @return The parsed reply as a JSON object, std::nullopt on communication or parse error.
     std::optional<json> write_read_json(std::string_view method, json params = json{});
 
-    // Can be used to get send and receive any command whose result can be parsed to a
-    // length 3 array of integers e.g. getAxesDisplacement, getAbsolutePositions
-    std::optional<std::array<int64_t, NUM_AXES>> get_axes(std::string_view method);
-
-    // Can be used to get send and receive any command whose
-    // result can be parsed to a bool
-    std::optional<bool> get_bool(std::string_view method);
-
-    // Sends an JSON-RPC formatted command for the given method and attempts
-    // to parse the result into the requested type
+    /// @brief Sends a JSON-RPC command and attempts to parse the result into the requested type.
+    ///
+    /// @tparam T The expected return type of the RPC result.
+    /// @param method The JSON-RPC method to call.
+    /// @param params (Optional) A JSON object for parameters to pass.
+    /// @return The parsed value of type T if successful, std::nullopt on communication or parse error.
     template <typename T>
-    std::optional<T> do_rpc(std::string_view method) {
-	if (auto data = write_read_json(method); data) {
-	    if (data->contains("result")) {
-		try {
-		    return data.value()["result"].get<T>();
-		} catch (...) {
-		    return std::nullopt;
-		}
-	    }
-	}
-	return std::nullopt;
+    std::optional<T> do_rpc(std::string_view method, json params = json{}) {
+        if (auto data = write_read_json(method); data) {
+            if (data->contains("result")) {
+                try {
+                    return data.value()["result"].get<T>();
+                } catch (...) {
+                    return std::nullopt;
+                }
+            }
+        }
+        return std::nullopt;
     }
 
   protected:
