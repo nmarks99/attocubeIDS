@@ -55,9 +55,37 @@ record(int64in, "$(P)$(R):RefPos3") {
     field(SCAN, "I/O Intr")
 }
 
+record(bo, "$(P)$(R):StartMeasurement") {
+    field(DTYP, "asynInt32")
+    field(OUT, "@asyn($(PORT),$(ADDR=0))START_MEASUREMENT")
+}
+
+record(bo, "$(P)$(R):StopMeasurement") {
+    field(DTYP, "asynInt32")
+    field(OUT, "@asyn($(PORT),$(ADDR=0))STOP_MEASUREMENT")
+}
+
 record(longin, "$(P)$(R):MeasEnabled") {
     field(DTYP, "asynInt32")
     field(INP, "@asyn($(PORT),$(ADDR=0))MEASUREMENT_ENABLED")
+    field(SCAN, "I/O Intr")
+}
+
+record(stringin ,"$(P)$(R):Mode") {
+    field(DTYP, "asynOctetRead")
+    field(INP, "@asyn($(PORT),$(ADDR=0))CURRENT_MODE")
+    field(SCAN, "I/O Intr")
+}
+
+record(stringin ,"$(P)$(R):DeviceType") {
+    field(DTYP, "asynOctetRead")
+    field(INP, "@asyn($(PORT),$(ADDR=0))DEVICE_TYPE")
+    field(SCAN, "I/O Intr")
+}
+
+record(stringin ,"$(P)$(R):FPGAVersion") {
+    field(DTYP, "asynOctetRead")
+    field(INP, "@asyn($(PORT),$(ADDR=0))FPGA_VERSION")
     field(SCAN, "I/O Intr")
 }
 
@@ -126,3 +154,5 @@ record(bi, "$(P)$(R):Polling") {
     field(ZNAM, "Suspended")
     field(ONAM, "Polling")
 }
+
+

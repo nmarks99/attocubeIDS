@@ -29,10 +29,15 @@ AttocubeIDS::AttocubeIDS(const char* conn_port, const char* driver_port)
         return;
     }
 
+    createParam(START_MEASUREMENT_STR, asynParamInt32, &startMeasurementId_);
+    createParam(STOP_MEASUREMENT_STR, asynParamInt32, &stopMeasurementId_);
     createParam(RESUME_POLLER_STR, asynParamInt32, &resumePollerId_);
     createParam(SUSPEND_POLLER_STR, asynParamInt32, &suspendPollerId_);
     createParam(POLL_PERIOD_STR, asynParamFloat64, &pollPeriodId_);
     createParam(MEASUREMENT_ENABLED_STR, asynParamInt32, &measurementEnabledId_);
+    createParam(CURRENT_MODE_STR, asynParamOctet, &currentModeId_);
+    createParam(DEVICE_TYPE_STR, asynParamOctet, &deviceTypeId_);
+    createParam(FPGA_VERSION_STR, asynParamOctet, &fpgaVersionId_);
     createParam(AXIS0_DISPLACEMENT_STR, asynParamInt64, &axis0DisplacementId_);
     createParam(AXIS1_DISPLACEMENT_STR, asynParamInt64, &axis1DisplacementId_);
     createParam(AXIS2_DISPLACEMENT_STR, asynParamInt64, &axis2DisplacementId_);
@@ -42,6 +47,14 @@ AttocubeIDS::AttocubeIDS(const char* conn_port, const char* driver_port)
     createParam(AXIS0_REFERENCE_POS_STR, asynParamInt64, &axis0ReferencePosId_);
     createParam(AXIS1_REFERENCE_POS_STR, asynParamInt64, &axis1ReferencePosId_);
     createParam(AXIS2_REFERENCE_POS_STR, asynParamInt64, &axis2ReferencePosId_);
+
+    // Get some parameters that won't change at runtime
+    if (auto devtype = do_rpc<StringTuple>(Method::DeviceType); devtype) {
+	setStringParam(deviceTypeId_, std::get<0>(*devtype));
+    }
+    if (auto fpga_ver = do_rpc<StringTuple>(Method::FpgaVersion); fpga_ver) {
+	setStringParam(fpgaVersionId_, std::get<0>(*fpga_ver));
+    }
 
     poller_thread_id_ = epicsThreadCreate("AttocubeIDSPoller", epicsThreadPriorityLow,
                                           epicsThreadGetStackSize(epicsThreadStackMedium),
@@ -127,6 +140,10 @@ void AttocubeIDS::poll() {
             setIntegerParam(measurementEnabledId_, enabled);
         }
 
+	if (auto mode = do_rpc<StringTuple>(Method::CurrentMode); mode) {
+	    setStringParam(currentModeId_, std::get<0>(*mode));
+	}
+
         callParamCallbacks();
         unlock();
 
@@ -151,6 +168,19 @@ asynStatus AttocubeIDS::writeInt32(asynUser* pasynUser, epicsInt32 value) {
     } else if (function == suspendPollerId_) {
         poller_should_suspend_ = true;
     }
+
+    else if (function == startMeasurementId_) {
+	if (auto err = do_rpc<IntTuple>(Method::StartMeasurement); err) {
+	    auto [err_no] = *err;
+	    std::cout << "Starting measurement. err_no = " << err_no << std::endl;
+	}
+    } else if (function == stopMeasurementId_) {
+	if (auto err = do_rpc<IntTuple>(Method::StopMeasurement); err) {
+	    auto [err_no] = *err;
+	    std::cout << "Stopping measurement. err_no = " << err_no << std::endl;
+	}
+    }
+
 
     callParamCallbacks();
     return comm_ok ? asynSuccess : asynError;

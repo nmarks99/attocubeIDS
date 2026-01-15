@@ -14,6 +14,11 @@ inline constexpr std::string_view AbsolutePosition = "com.attocube.ids.displacem
 inline constexpr std::string_view AbsolutePositions = "com.attocube.ids.displacement.getAbsolutePositions";
 inline constexpr std::string_view ReferencePositions = "com.attocube.ids.displacement.getReferencePositions";
 inline constexpr std::string_view MeasurementEnabled = "com.attocube.ids.displacement.getMeasurementEnabled";
+inline constexpr std::string_view CurrentMode = "com.attocube.ids.system.getCurrentMode";
+inline constexpr std::string_view DeviceType = "com.attocube.ids.system.getDeviceType";
+inline constexpr std::string_view FpgaVersion = "com.attocube.ids.system.getFpgaVersion";
+inline constexpr std::string_view StartMeasurement = "com.attocube.ids.system.startMeasurement";
+inline constexpr std::string_view StopMeasurement = "com.attocube.ids.system.stopMeasurement";
 }; // namespace Method
 
 // asyn parameter names
@@ -30,6 +35,11 @@ inline constexpr char MEASUREMENT_ENABLED_STR[] = "MEASUREMENT_ENABLED";
 inline constexpr char POLL_PERIOD_STR[] = "POLL_PERIOD";
 inline constexpr char SUSPEND_POLLER_STR[] = "SUSPEND_POLLER";
 inline constexpr char RESUME_POLLER_STR[] = "RESUME_POLLER";
+inline constexpr char CURRENT_MODE_STR[] = "CURRENT_MODE";
+inline constexpr char DEVICE_TYPE_STR[] = "DEVICE_TYPE";
+inline constexpr char FPGA_VERSION_STR[] = "FPGA_VERSION";
+inline constexpr char START_MEASUREMENT_STR[] = "START_MEASUREMENT";
+inline constexpr char STOP_MEASUREMENT_STR[] = "STOP_MEASUREMENT";
 
 inline constexpr size_t IO_BUFFER_SIZE = 512;
 inline constexpr double IO_TIMEOUT = 1.0;
@@ -56,7 +66,9 @@ class AttocubeIDS : public asynPortDriver {
     // Some internal type aliases
     using I64Array3 = std::array<int64_t, 3>; ///< 3-element 64-bit integer array (e.g., axes displacement).
     using I64Array4 = std::array<int64_t, 4>; ///< 4-element 64-bit integer array.
-    using IntPair = std::tuple<int, int>;     ///< Pair of integers for coordinate or status mapping.
+    using IntPair = std::tuple<int, int>;     ///< Pair of integers
+    using StringTuple = std::tuple<std::string>; ///< A single string in a tuple
+    using IntTuple = std::tuple<int>;            ///< A single int in a tuple
 
     /// @brief Writes out_buffer_ to device and reads reply into in_buffer_
     ///
@@ -97,6 +109,11 @@ class AttocubeIDS : public asynPortDriver {
     int resumePollerId_;
     int suspendPollerId_;
     int pollPeriodId_;
+    int currentModeId_;
+    int deviceTypeId_;
+    int fpgaVersionId_;
+    int startMeasurementId_;
+    int stopMeasurementId_;
     int measurementEnabledId_;
     int axis0DisplacementId_;
     int axis1DisplacementId_;
